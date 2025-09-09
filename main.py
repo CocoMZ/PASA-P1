@@ -34,10 +34,10 @@ class SignalProcessor:
     def Subdataset(self, startTime = None, endTime = None):
         beginning = int(0)
         if startTime is not None:
-            beginning = int((startTime - self.XStart) // self.dX)
+            beginning = int((startTime - self.XStart) // self.dX) # beginning index
 
-        ending = int((endTime - self.XStart) // self.dX)
-        self.max_n = ending - beginning
+        ending = int((endTime - self.XStart) // self.dX) # ending index
+        self.max_n = ending - beginning 
         if self.max_n % 2 == 0:
             self.max_n -= 1
         print("Maximum n value: ", self.max_n, " out of ", self.N)
@@ -46,6 +46,7 @@ class SignalProcessor:
         plt.figure()
         plt.xlabel("Time (s)")
         plt.ylabel("Strain")
+        plt.title("Subdataset")
         plt.plot(self.xValues, self.yValues)
         self.f = np.fft.fftshift(np.fft.fftfreq(self.max_n, d=self.dX)) #Hz
         self.f_norm = np.linspace(-1, 1, self.max_n)
