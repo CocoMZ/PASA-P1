@@ -117,25 +117,31 @@ class SignalProcessor:
         return f_PA, R_y_PA, k
     
     def WhiteningFilter(self):
-        freq = np.linspace(0, 1, self.max_n // 2)
-        self.w_f = sp.firwin2(self.max_n, freq, 1 / np.sqrt(self.R_y_PS[0:self.max_n // 2]))
+
+        self.f = np.linspace(-1, 1, self.max_n)
+        freq = np.linspace(0, 1, self.max_n // 2 +1)
+        R_y_half = np.abs(self.R_y_PS[self.max_n//2:self.max_n])
+        
+        self.w_f = sp.firwin2(self.max_n, freq, 1 / np.sqrt(R_y_half))
+        
         self.W_f = np.fft.fft(self.w_f)
         plt.figure()
-        plt.semilogy(self.f, np.fft.fftshift(np.abs(self.W_f)))
-
+        plt.semilogy(self.f,  np.fft.fftshift(np.abs(self.W_f)))
+        return self.W_f
 
     def Whiten(self, start, duration):
         # Get actual values. The event lasts for approximately 200 ms
         self.event_duration = int(duration // self.dX)
         self.start = int((start + self.event_duration / 2) - self.max_n / 2)
-        ye = self.dset[start:start + self.max_n]
+        ye = self.dset[self.start:start + self.max_n]
         Ye = np.fft.fft(ye)
         Result = Ye * self.W_f
-        self.result = np.fft.ifft(Result)
+        self.result = np.fft.ifft(Result).real
         plt.figure()
         plt.semilogy(self.f, np.abs(Ye))
         plt.figure()
-        plt.plot(self.result.real)
+        plt.plot(self.result)
+        return self.result
 
     def SaveToFile(self, durations, speedfactor = 1):
         half_durations = int(durations//2)
