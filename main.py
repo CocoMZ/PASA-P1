@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 class SignalProcessor:
     def __init__(self, name):
+        self.R_y_PA = None
+        self.f_norm = ModuleNotFoundError
         self.name = name
         self.start = None
         self.event_duration = None
@@ -36,13 +38,19 @@ class SignalProcessor:
 
         ending = int((endTime - self.XStart) // self.dX)
         self.max_n = ending - beginning
-        if self.max_n % 2 == 0: # make sure max_n is uneven
+        if self.max_n % 2 == 0:
             self.max_n -= 1
-        self.f = np.fft.fftshift(np.fft.fftfreq(self.max_n, d=self.dX)) # Hz
         print("Maximum n value: ", self.max_n, " out of ", self.N)
         self.xValues = self.XStart + self.dX * np.arange(self.max_n)
-        self.yValues = self.dset[beginning:self.max_n]
+        self.yValues = self.dset[beginning:ending - 1]
+        plt.figure()
+        plt.xlabel("Time (s)")
+        plt.ylabel("Strain")
+        plt.plot(self.xValues, self.yValues)
+        self.f = np.fft.fftshift(np.fft.fftfreq(self.max_n, d=self.dX)) #Hz
+        self.f_norm = np.linspace(-1, 1, self.max_n)
         return self.xValues, self.yValues, self.max_n
+
 
     def WindowSubdataset(self):
         # idk wht we are plotting here
@@ -109,19 +117,27 @@ class SignalProcessor:
 
         # average the periodograms
         segments = np.array(segments)
-        R_y_PA = np.mean(segments, axis=0) # includes normalization
+        self.R_y_PA = np.mean(segments, axis=0) # includes normalization
 
         f_PA = np.fft.fftshift(np.fft.fftfreq(L, d=self.dX))            
-        R_y_PA = np.fft.fftshift(R_y_PA) 
+        self.R_y_PA = np.fft.fftshift(self.R_y_PA) 
         self.K = k
-        return f_PA, R_y_PA, k
+        return f_PA, self.R_y_PA, k
     
-    def WhiteningFilter(self):
-
+    def WhiteningFilter(self, mode = "Averaging"):
         self.f = np.linspace(-1, 1, self.max_n)
-        freq = np.linspace(0, 1, self.max_n // 2 +1)
-        R_y_half = np.abs(self.R_y_PS[self.max_n//2:self.max_n])
-        
+        freq = []
+        R_y_half = []
+        match mode:
+            case "Averaging":
+                freq = np.linspace(0, 1, self.R_y_PA.shape[0] // 2)
+                R_y_half = np.abs(self.R_y_PA[self.R_y_PA.shape[0]//2:self.R_y_PA.shape[0]])
+            case "Smoothing":
+                freq = np.linspace(0, 1, self.max_n // 2 +1)
+                R_y_half = np.abs(self.R_y_PS[self.max_n // 2:self.max_n])
+            case _:
+                raise ValueError("Unknown mode.")
+
         self.w_f = sp.firwin2(self.max_n, freq, 1 / np.sqrt(R_y_half))
         
         self.W_f = np.fft.fft(self.w_f)
@@ -133,7 +149,7 @@ class SignalProcessor:
         # Get actual values. The event lasts for approximately 200 ms
         self.event_duration = int(duration // self.dX)
         self.start = int((start + self.event_duration / 2) - self.max_n / 2)
-        ye = self.dset[self.start:start + self.max_n]
+        ye = self.dset[self.start:self.start + self.max_n]
         Ye = np.fft.fft(ye)
         Result = Ye * self.W_f
         self.result = np.fft.ifft(Result).real
