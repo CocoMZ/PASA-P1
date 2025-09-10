@@ -25,13 +25,14 @@ class SignalProcessor:
         self.path = 'data/' + name + ".hdf5"
         self.file = hdf.File(self.path, "r")
         self.dset = self.file['strain']['Strain']
+        self.values = (self.dset[()] - np.mean(self.dset[()])) / np.std(self.dset[()]) # normalizing
         self.XStart = self.dset.attrs.get("Xstart")
         self.dX = self.dset.attrs.get("Xspacing")
         self.N = self.dset.attrs.get("Npoints")
         self.f_s = 1 / self.dX
         self.f = ModuleNotFoundError
 
-    def Subdataset(self, startTime = None, endTime = None):
+    def Subdataset(self, startTime = None, endTime = None, plot = False):
         beginning = int(0)
         if startTime is not None:
             beginning = int((startTime - self.XStart) // self.dX) # beginning index
@@ -43,26 +44,22 @@ class SignalProcessor:
         print("Maximum n value: ", self.max_n, " out of ", self.N)
         self.xValues = self.XStart + self.dX * np.arange(self.max_n)
         self.yValues = self.dset[beginning:ending - 1]
-        plt.figure()
-        plt.xlabel("Time (s)")
-        plt.ylabel("Strain")
-        plt.title("Subdataset")
-        plt.plot(self.xValues, self.yValues)
+        if plot:
+            plt.figure()
+            plt.xlabel("Time (s)")
+            plt.ylabel("Strain")
+            plt.title("Subdataset")
+            plt.grid(True)
+            plt.xlim(self.xValues[0], self.xValues[-1])
+            plt.plot(self.xValues, self.yValues)
         self.f = np.fft.fftshift(np.fft.fftfreq(self.max_n, d=self.dX)) #Hz
         self.f_norm = np.linspace(-1, 1, self.max_n)
         return self.xValues, self.yValues, self.max_n
 
 
     def WindowSubdataset(self):
-        # idk wht we are plotting here
         window = sp.windows.chebwin(self.max_n, 100)
         self.yValues *= window
-        # I dont understand this plot
-        # plt.figure(figsize=(7, 5))
-        # plt.semilogy(np.fft.fftshift(np.abs(np.fft.fft(self.yValues))))
-        # plt.title("Windowed Time Series")
-        # plt.grid(True)
-        # plt.show()
 
     def Periodogram(self, xValues = None, yValues = None, max_n = None):
         if xValues is None:
@@ -78,7 +75,6 @@ class SignalProcessor:
         return f, self.R_y
 
     def PeriodogramSmoothing(self, l_factor = 0.01, m = None):
-        # TODO: return delta_omega
         M = m
         if m is None:
             M = int(self.max_n * l_factor)
@@ -144,6 +140,12 @@ class SignalProcessor:
         self.W_f = np.fft.fft(self.w_f)
         plt.figure()
         plt.semilogy(self.f,  np.fft.fftshift(np.abs(self.W_f)))
+        plt.title("Whitening Filter")
+        plt.xlabel("Normalized Frequency")
+        plt.grid(True)
+        plt.ylabel("|W(f)|")
+        plt.xlim(-1, 1)
+        plt.grid(True)
         return self.W_f
 
     def Whiten(self, start, duration):
@@ -156,8 +158,11 @@ class SignalProcessor:
         self.result = np.fft.ifft(Result).real
         plt.figure()
         plt.semilogy(self.f, np.abs(Ye))
-        plt.figure()
-        plt.plot(self.result)
+        plt.title("Signal of the Anomaly")
+        plt.xlabel("Normalized Frequency")
+        plt.grid(True)
+        plt.ylabel("|Y(f)|")
+        plt.xlim(-1, 1)
         return self.result
 
     def SaveToFile(self, durations, speedfactor = 1):
@@ -165,8 +170,9 @@ class SignalProcessor:
         cropped_result = self.result[int(self.start - half_durations * self.event_duration):int(self.start + half_durations * self.event_duration)].real
         result_max = max(cropped_result)
         cropped_result /= result_max
-        plt.figure()
-        plt.plot(cropped_result)
+        # plt.figure()
+        # plt.plot(cropped_result)
+        # plt.title("Cropped Whitened Signal of the Anomaly in the Time Domain")
         audio_data = (cropped_result * 2 ** 16 - 1).astype(np.int16)
         sio.wavfile.write("Filtered" + self.name + ".wav", rate=int((1 / self.dX) * 1), data=audio_data)
 
